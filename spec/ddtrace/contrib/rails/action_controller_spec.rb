@@ -5,7 +5,6 @@ RSpec.describe 'ActionController tracing' do
   let(:rails_options) { { tracer: tracer } }
 
   before(:each) do
-    Datadog::RailsActionPatcher.patch_action_controller
     Datadog.configure do |c|
       c.use :rails, rails_options
     end
@@ -28,7 +27,7 @@ RSpec.describe 'ActionController tracing' do
   describe '#action' do
     subject(:result) { action.call(env) }
     let(:action) { controller.action(name) }
-    let(:env) { {} }
+    let(:env) { Rack::MockRequest.env_for('/test', {}) }
 
     shared_examples_for 'a successful dispatch' do
       it do
@@ -41,6 +40,38 @@ RSpec.describe 'ActionController tracing' do
     end
 
     describe 'for a controller' do
+      context 'that inherits from ActionController::Base' do
+        let(:base_class) { ActionController::Base }
+
+        context 'which halts an action during a #before_action' do
+          let(:controller) do
+            super().tap do |controller_class|
+              controller_class.class_eval do
+                # Rails 3.x-5.x compatibility
+                if respond_to?(:before_action)
+                  before_action :short_circuit
+                else
+                  before_filter :short_circuit
+                end
+
+                def short_circuit
+                  head :no_content
+                end
+              end
+            end
+          end
+
+          it do
+            expect { result }.to_not raise_error
+            expect(result).to be_a_kind_of(Array)
+            expect(result).to have(3).items
+            expect(result.first).to eq(204) # Expect "No Content"
+            expect(all_spans).to have(1).items
+            expect(all_spans.first.name).to eq('rails.action_controller')
+          end
+        end
+      end
+
       context 'that inherits from ActionController::Metal' do
         let(:base_class) { ActionController::Metal }
 
