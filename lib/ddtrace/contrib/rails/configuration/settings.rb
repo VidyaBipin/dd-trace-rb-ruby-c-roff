@@ -6,6 +6,42 @@ module Datadog
       module Configuration
         # Custom settings for the Rails integration
         class Settings < Contrib::Configuration::Settings
+          COMPONENTS = [
+            :active_record,
+            :action_view,
+            :action_pack,
+            :active_support,
+            :rack
+          ].freeze
+
+          integration :rack, defer: true do |rack|
+            rack.tracer = tracer
+            rack.application = ::Rails.application
+            rack.service_name = service_name
+            rack.middleware_names = middleware_names
+            rack.distributed_tracing = distributed_tracing
+          end
+
+          integration :active_support, defer: true do |active_support|
+            active_support.cache_service = cache_service
+            active_support.tracer = tracer
+          end
+
+          integration :action_pack, defer: true do |action_pack|
+            action_pack.service_name = service_name
+            action_pack.tracer = tracer
+          end
+
+          integration :action_view, defer: true do |action_view|
+            action_view.service_name = service_name
+            action_view.tracer = tracer
+          end
+
+          integration :active_record, defer: true do |active_record|
+            active_record.service_name = database_service
+            active_record.tracer = tracer
+          end
+
           option  :analytics_enabled,
                   default: -> { env_to_bool(Ext::ENV_ANALYTICS_ENABLED, nil) },
                   lazy: true do |value|
@@ -58,10 +94,8 @@ module Datadog
 
           option :tracer, default: Datadog.tracer do |value|
             value.tap do
-              Datadog.configuration[:active_record][:tracer] = value
-              Datadog.configuration[:active_support][:tracer] = value
-              Datadog.configuration[:action_pack][:tracer] = value
-              Datadog.configuration[:action_view][:tracer] = value
+              Datadog.configuration[:rack][:tracer] = value
+              COMPONENTS.each { |name| Datadog.configuration[name][:tracer] = value }
             end
           end
         end
