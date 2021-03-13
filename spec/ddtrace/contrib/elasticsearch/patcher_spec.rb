@@ -6,6 +6,8 @@ require 'ddtrace'
 require 'elasticsearch-transport'
 
 RSpec.describe Datadog::Contrib::Elasticsearch::Patcher do
+  include_context 'completed traces'
+
   let(:host) { ENV.fetch('TEST_ELASTICSEARCH_HOST', '127.0.0.1') }
   let(:port) { ENV.fetch('TEST_ELASTICSEARCH_PORT', '9200').to_i }
   let(:server) { "http://#{host}:#{port}" }
@@ -32,7 +34,7 @@ RSpec.describe Datadog::Contrib::Elasticsearch::Patcher do
     subject(:request) { client.perform_request 'GET', '_cluster/health' }
 
     it 'creates a span' do
-      expect { request }.to change { fetch_spans.first }.to Datadog::Span
+      expect { request }.to change { spans.first }.to Datadog::Span
     end
 
     context 'inside a span' do
@@ -45,7 +47,7 @@ RSpec.describe Datadog::Contrib::Elasticsearch::Patcher do
       end
 
       it 'creates a child request span' do
-        expect { request_inside_a_span }.to change { fetch_spans.length }.to 2
+        expect { request_inside_a_span }.to change { spans.length }.to 2
       end
 
       it 'sets request span parent id and trace id' do
@@ -108,7 +110,7 @@ RSpec.describe Datadog::Contrib::Elasticsearch::Patcher do
     subject(:request) { client.perform_request 'PUT', "#{index_name}/#{document_type}/#{document_id}", {}, document_body }
 
     it 'creates a span' do
-      expect { request }.to change { fetch_spans.first }.to Datadog::Span
+      expect { request }.to change { spans.first }.to Datadog::Span
     end
 
     describe 'index request span' do

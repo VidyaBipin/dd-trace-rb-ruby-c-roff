@@ -9,6 +9,8 @@ require 'ddtrace/contrib/delayed_job/plugin'
 require_relative 'delayed_job_active_record'
 
 RSpec.describe Datadog::Contrib::DelayedJob::Plugin, :delayed_job_active_record do
+  include_context 'completed traces'
+
   let(:sample_job_object) do
     stub_const('SampleJob', Class.new do
       def perform; end
@@ -44,7 +46,7 @@ RSpec.describe Datadog::Contrib::DelayedJob::Plugin, :delayed_job_active_record 
     let(:worker) { double(:worker, name: 'worker') }
 
     before do
-      allow(tracer).to receive(:shutdown!).and_call_original
+      allow(::Datadog).to receive(:shutdown!)
     end
 
     it 'execution callback yields control' do
@@ -53,22 +55,22 @@ RSpec.describe Datadog::Contrib::DelayedJob::Plugin, :delayed_job_active_record 
 
     it 'shutdown happens after yielding' do
       Delayed::Worker.lifecycle.run_callbacks(:execute, worker) do
-        expect(tracer).not_to have_received(:shutdown!)
+        expect(::Datadog).not_to have_received(:shutdown!)
       end
 
-      expect(tracer).to have_received(:shutdown!)
+      expect(::Datadog).to have_received(:shutdown!)
     end
   end
 
   describe 'instrumented job invocation' do
     let(:job_params) { {} }
-    let(:span) { fetch_spans.first }
-    let(:enqueue_span) { fetch_spans.first }
+    let(:span) { spans.first }
+    let(:enqueue_span) { spans.first }
 
     subject(:job_run) { Delayed::Job.enqueue(sample_job_object.new, job_params) }
 
     it 'creates a span' do
-      expect { job_run }.to change { fetch_spans }.to all(be_instance_of(Datadog::Span))
+      expect { job_run }.to change { spans }.to all(be_instance_of(Datadog::Span))
     end
 
     context 'when the job looks like Active Job' do
@@ -141,7 +143,7 @@ RSpec.describe Datadog::Contrib::DelayedJob::Plugin, :delayed_job_active_record 
     end
 
     describe 'invoke span' do
-      subject(:span) { fetch_spans.first }
+      subject(:span) { spans.first }
 
       before { job_run }
 
@@ -169,7 +171,7 @@ RSpec.describe Datadog::Contrib::DelayedJob::Plugin, :delayed_job_active_record 
     end
 
     describe 'enqueue span' do
-      subject(:span) { fetch_spans.last }
+      subject(:span) { spans.last }
 
       before { job_run }
 

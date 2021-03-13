@@ -44,10 +44,11 @@ end
 
 RSpec.shared_examples_for 'instrumented request' do
   include_context 'integration context'
+  include_context 'completed traces'
 
   describe 'instrumented request' do
     it 'creates a span' do
-      expect { request }.to change { fetch_spans.first }.to be_instance_of(Datadog::Span)
+      expect { request }.to change { spans.first }.to be_instance_of(Datadog::Span)
     end
 
     it 'returns response' do

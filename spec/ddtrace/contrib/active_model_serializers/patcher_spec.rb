@@ -11,6 +11,7 @@ require 'ddtrace/ext/http'
 
 RSpec.describe 'ActiveModelSerializers patcher' do
   include_context 'AMS serializer'
+  # include_context 'completed traces'
 
   let(:configuration_options) { {} }
 

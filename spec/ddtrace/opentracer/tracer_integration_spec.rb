@@ -7,13 +7,17 @@ if Datadog::OpenTracer.supported?
   RSpec.describe Datadog::OpenTracer::Tracer do
     include_context 'OpenTracing helpers'
 
-    subject(:tracer) { described_class.new(writer: writer) }
-
-    let(:writer) { FauxWriter.new }
+    subject(:tracer) { described_class.new }
     let(:datadog_tracer) { tracer.datadog_tracer }
-    let(:datadog_spans) { datadog_tracer.writer.spans(:keep) }
 
-    after { writer.stop }
+    let(:datadog_traces) { TestTraceBuffer.new }
+    let(:datadog_spans) { datadog_traces.spans }
+
+    before do
+      datadog_tracer.trace_completed.subscribe(:test) do |trace|
+        datadog_traces << trace
+      end
+    end
 
     def current_trace_for(object)
       case object

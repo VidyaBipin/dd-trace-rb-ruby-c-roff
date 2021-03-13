@@ -7,14 +7,16 @@ if Datadog::OpenTracer.supported?
   RSpec.describe 'OpenTracer context propagation' do
     include_context 'OpenTracing helpers'
 
-    subject(:tracer) { Datadog::OpenTracer::Tracer.new(writer: FauxWriter.new) }
-
+    subject(:tracer) { Datadog::OpenTracer::Tracer.new }
     let(:datadog_tracer) { tracer.datadog_tracer }
-    let(:datadog_spans) { datadog_tracer.writer.spans(:keep) }
 
-    after do
-      # Ensure tracer is shutdown between test, as to not leak threads.
-      datadog_tracer.shutdown!
+    let(:datadog_traces) { TestTraceBuffer.new }
+    let(:datadog_spans) { datadog_traces.spans }
+
+    before do
+      datadog_tracer.trace_completed.subscribe(:test) do |trace|
+        datadog_traces << trace
+      end
     end
 
     def sampling_priority_metric(span)

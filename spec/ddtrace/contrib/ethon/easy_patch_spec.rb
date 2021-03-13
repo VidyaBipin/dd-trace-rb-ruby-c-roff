@@ -8,11 +8,13 @@ require 'ddtrace/contrib/analytics_examples'
 require 'spec/ddtrace/contrib/ethon/support/thread_helpers'
 
 RSpec.describe Datadog::Contrib::Ethon::EasyPatch do
+  include_context 'trace components'
+
   let(:configuration_options) { {} }
   let(:easy) { EthonSupport.ethon_easy_new }
 
   before do
-    Datadog.configure do |c|
+    Datadog.configure(global_settings) do |c|
       c.use :ethon, configuration_options
     end
   end
@@ -120,7 +122,7 @@ RSpec.describe Datadog::Contrib::Ethon::EasyPatch do
     end
 
     it 'creates a span' do
-      expect { subject }.to change { fetch_spans.first }.to be_instance_of(Datadog::Span)
+      expect { subject }.to change { spans.first }.to be_instance_of(Datadog::Span)
     end
 
     it 'cleans up span stored on easy' do
