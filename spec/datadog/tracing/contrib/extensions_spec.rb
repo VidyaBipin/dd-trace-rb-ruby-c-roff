@@ -194,5 +194,42 @@ RSpec.describe Datadog::Tracing::Contrib::Extensions do
         end
       end
     end
+
+    describe '#trace_method' do
+      subject(:trace_method) { Datadog::Tracing.trace_method(target, name, span_options) }
+      let(:name) { 'test_span' }
+      let(:target) { 'Target#method' }
+      let(:span_options) { {} }
+
+      it { is_expected.to be_a_kind_of(Datadog::Tracing::Contrib::Hook) }
+      it { is_expected.to have_attributes(name: name, target: target, span_options: span_options) }
+
+      context 'when datadog-instrumentation not loaded' do
+        let(:logger) { double(Datadog::Core::Logger) }
+        before do
+          allow(logger).to receive(:warn)
+          allow(Datadog).to receive(:logger).and_return(logger)
+          allow(Datadog::Tracing::Contrib::Hook).to receive(:supported?).and_return(false)
+        end
+
+        it do
+          expect(trace_method).to be(nil)
+          expect(logger).to have_received(:warn)
+        end
+      end
+
+      context 'when called' do
+        let(:hook) { double('hook', :inject! => nil) }
+
+        before do
+          allow(Datadog::Tracing::Contrib::Hook).to receive(:new).and_return(hook)
+        end
+
+        it do
+          trace_method
+          expect(hook).to have_received(:inject!)
+        end
+      end
+    end
   end
 end
