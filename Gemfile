@@ -102,3 +102,9 @@ group :check do
     gem 'steep', '~> 1.3.0', require: false
   end
 end
+
+
+gem 'activerecord'
+gem 'bullet'
+gem 'sqlite3'
+gem 'mysql2'
