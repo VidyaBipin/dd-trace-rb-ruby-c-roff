@@ -5,7 +5,10 @@ module Datadog
   module Transport
     module HTTP
       module Adapters
-        # Adapter for Net::HTTP
+        # Adapter for Net::HTTP.
+        # This adapter reuses a long-running HTTP connection with the target URL
+        # when possible.
+        # It is required to invoke {#close} to ensure the connection is closed.
         class Net
           attr_reader \
             :hostname,
@@ -13,8 +16,15 @@ module Datadog
             :timeout,
             :ssl
 
-          # in seconds
+          # In seconds.
           DEFAULT_TIMEOUT = 30
+
+          # If this many seconds have passed since the last request, create a new TCP connection.
+          # This should match the trace agent timeout, as the agent will close its side of the connect after this
+          # much time has passed:
+          # https://github.com/DataDog/datadog-agent/blob/ef47fb8c411938e672eb29f3cc5ad79b00133f02/pkg/trace/api/api.go#L150
+          # We subtract 1 second from the agent timeout, to avoid being just slightly too late.
+          KEEP_ALIVE_TIMEOUT = 4 # In seconds.
 
           # @deprecated Positional parameters are deprecated. Use named parameters instead.
           def initialize(hostname = nil, port = nil, **options)
@@ -37,12 +47,17 @@ module Datadog
             # DEV Initializing +Net::HTTP+ directly help us avoid expensive
             # options processing done in +Net::HTTP.start+:
             # https://github.com/ruby/ruby/blob/b2d96abb42abbe2e01f010ffc9ac51f0f9a50002/lib/net/http.rb#L614-L618
-            req = ::Net::HTTP.new(hostname, port, nil)
+            @req ||= begin
+              req = ::Net::HTTP.new(hostname, port, nil)
 
-            req.use_ssl = ssl
-            req.open_timeout = req.read_timeout = timeout
+              req.use_ssl = ssl
+              req.open_timeout = req.read_timeout = timeout
+              req.keep_alive_timeout = KEEP_ALIVE_TIMEOUT
 
-            req.start(&block)
+              req.start # Calling #start without a block creates a long-lived connection
+            end
+
+            yield @req
           end
 
           def call(env)
@@ -66,13 +81,11 @@ module Datadog
           end
 
           def post(env)
-            post = nil
-
             if env.form.nil? || env.form.empty?
               post = ::Net::HTTP::Post.new(env.path, env.headers)
               post.body = env.body
             else
-              post = ::Datadog::Core::Vendor::Net::HTTP::Post::Multipart.new(
+              post = Core::Vendor::Net::HTTP::Post::Multipart.new(
                 env.path,
                 env.form,
                 env.headers
@@ -90,6 +103,14 @@ module Datadog
 
           def url
             "http://#{hostname}:#{port}?timeout=#{timeout}"
+          end
+
+          def close
+            # Clean up HTTP socket
+            if @req && @req.started?
+              @req.finish
+              @req = nil
+            end
           end
 
           # Raised when called with an unknown HTTP method

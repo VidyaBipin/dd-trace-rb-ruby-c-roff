@@ -32,6 +32,9 @@ RSpec.describe 'Tracer integration tests' do
         .to receive(:format!).and_wrap_original do |original|
           segments << original.call
         end
+
+      WebMock.disable!
+      Datadog.configuration.reset!
     end
 
     def tracer
@@ -75,6 +78,14 @@ RSpec.describe 'Tracer integration tests' do
 
   after { tracer.shutdown! }
 
+  def wait_for_flush(stat, num = 1)
+    test_repeat.times do
+      break if tracer.writer.stats[stat] >= num
+
+      sleep(0.1)
+    end
+  end
+
   describe 'agent receives span' do
     include_context 'agent-based test'
 
@@ -82,14 +93,6 @@ RSpec.describe 'Tracer integration tests' do
       tracer.trace('my.op') do |span|
         span.service = 'my.service'
         sleep(0.001)
-      end
-    end
-
-    def wait_for_flush(stat, num = 1)
-      test_repeat.times do
-        break if tracer.writer.stats[stat] >= num
-
-        sleep(0.1)
       end
     end
 
@@ -171,24 +174,57 @@ RSpec.describe 'Tracer integration tests' do
   describe 'agent receives short span' do
     include_context 'agent-based test'
 
-    before do
+    def trace
       tracer.trace('my.short.op') do |span|
         @span = span
         span.service = 'my.service'
       end
 
-      @first_shutdown = tracer.shutdown!
+      wait_for_flush(:traces_flushed)
     end
 
     let(:stats) { tracer.writer.stats }
 
     it do
-      expect(@first_shutdown).to be true
+      trace
+
       expect(@span.finished?).to be true
       expect(stats[:services_flushed]).to be_nil
     end
 
-    it_behaves_like 'flushed trace'
+    it 'reuses the same HTTP connection' do
+      expect_any_instance_of(::Net::HTTP).to receive(:connect).once.and_call_original
+
+      trace
+      trace
+
+      wait_for_flush(:traces_flushed, 2)
+    end
+
+    it 'handles remote timeout from trace agent' do
+      # Ensures this test is actually testing what it claims to.
+      # If only a single connection was made during the test, the
+      # desired reconnection behavior is not being tested.
+      expect_any_instance_of(::Net::HTTP).to receive(:connect).twice.and_call_original
+
+      trace
+      sleep 6 # Agent timeout is 5 seconds, the transport will have to reconnect
+      trace # Transport will reconnect
+
+      wait_for_flush(:traces_flushed, 2)
+
+      expect(stats).to include(traces_flushed: 2)
+      expect(stats[:transport])
+        .to have_attributes(
+              client_error: 0,
+              server_error: 0,
+              internal_error: 0
+            )
+    end
+
+    it_behaves_like 'flushed trace' do
+      before { trace }
+    end
   end
 
   describe 'rule sampler' do
@@ -403,6 +439,8 @@ RSpec.describe 'Tracer integration tests' do
 
       WebMock.enable!
 
+      WebMock.enable!
+
       trace # Run test subject
       wait_for_flush
     end
@@ -562,6 +600,8 @@ RSpec.describe 'Tracer integration tests' do
         tracer.trace('my.short.op') do |span|
           span.service = 'my.service'
         end
+
+        wait_for_flush(:traces_flushed)
 
         threads = Array.new(10) do
           Thread.new { tracer.shutdown! }

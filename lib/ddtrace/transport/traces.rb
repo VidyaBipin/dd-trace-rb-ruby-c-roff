@@ -111,12 +111,15 @@ module Datadog
       # This class initializes the HTTP client, breaks down large
       # batches of traces into smaller chunks and handles
       # API version downgrade handshake.
+      #
+      # DEV: We should add retry logic to the transport, as transient failures are common in a real network environment
       class Transport
         attr_reader :client, :apis, :default_api, :current_api_id
 
         def initialize(apis, default_api)
           @apis = apis
           @default_api = default_api
+          @client = nil
 
           change_api!(default_api)
         end
@@ -163,6 +166,10 @@ module Datadog
           apis[@current_api_id]
         end
 
+        def stop
+          @client.close if @client
+        end
+
         private
 
         def downgrade?(response)
@@ -180,6 +187,8 @@ module Datadog
 
         def change_api!(api_id)
           raise UnknownApiVersionError, api_id unless apis.key?(api_id)
+
+          @client.close if @client
 
           @current_api_id = api_id
           @client = HTTP::Client.new(current_api)

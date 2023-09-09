@@ -12,4 +12,6 @@ class FauxTransport < Datadog::Transport::HTTP::Client
       )
     )]
   end
+
+  def stop; end
 end
