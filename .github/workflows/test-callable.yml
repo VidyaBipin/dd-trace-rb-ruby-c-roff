@@ -1,0 +1,60 @@
+name: Unit Test Call
+
+on:
+  workflow_call:
+    inputs:
+      engine_name:
+        required: true
+        type: string
+      engine_version:
+        required: true
+        type: string
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    container:
+      image: "ghcr.io/datadog/images-rb/engines/ruby:3.3"
+    name: Prepare matrix
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute matrix
+        id: matrix
+        run: |
+          echo "matrix=$(ruby -ryaml -rjson -e 'puts JSON.dump(YAML.load(File.read("matrix.yml")))')" >> $GITHUB_OUTPUT
+
+  test:
+    runs-on: ubuntu-latest
+    name: Test ${{ matrix.spec.task }} ${{ matrix.spec.appraisal }} (${{ inputs.engine_name }} ${{ inputs.engine_version }})
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    env:
+      SKIP_SIMPLECOV: 1
+      DD_INSTRUMENTATION_TELEMETRY_ENABLED: false
+      DD_REMOTE_CONFIGURATION_ENABLED: false
+    container:
+      image: "ghcr.io/datadog/images-rb/engines/${{ inputs.engine_name }}:${{ inputs.engine_version }}"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bundle install
+        run: bundle install
+      - name: Appraisal install
+        id: appraisal
+        if: ${{ matrix.spec.appraisal }}
+        run: |
+          BUNDLE_GEMFILE="gemfiles/${{ inputs.engine_name }}_${{ inputs.engine_version }}_$(echo ${{ matrix.spec.appraisal }} | tr '-' '_').gemfile"
+          echo "BUNDLE_GEMFILE=${BUNDLE_GEMFILE}" >> $GITHUB_OUTPUT
+          export BUNDLE_GEMFILE
+          bundle install
+      - name: Run the test
+        run: |
+          if [[ -n "${{ steps.appraisal.outputs.BUNDLE_GEMFILE }}" ]]; then
+            BUNDLE_GEMFILE="${{ steps.appraisal.outputs.BUNDLE_GEMFILE }}"
+            export BUNDLE_GEMFILE
+          fi
+          bundle exec rake spec:${{ matrix.spec.task }}
+
