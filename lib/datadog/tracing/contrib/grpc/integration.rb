@@ -17,6 +17,10 @@ module Datadog
           # @public_api Changing the integration name or integration options can cause breaking changes
           register_as :grpc, auto_patch: true
 
+          def self.gems
+            ['grpc']
+          end
+
           def self.version
             Gem.loaded_specs['grpc'] && Gem.loaded_specs['grpc'].version
           end

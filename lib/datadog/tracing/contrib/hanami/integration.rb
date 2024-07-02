@@ -17,6 +17,10 @@ module Datadog
 
           register_as :hanami
 
+          def self.gems
+            ['hanami']
+          end
+
           def self.version
             Gem.loaded_specs['hanami'] && Gem.loaded_specs['hanami'].version
           end
