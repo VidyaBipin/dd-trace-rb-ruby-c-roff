@@ -24,16 +24,6 @@ class TestGraphQLSchema < ::GraphQL::Schema
 end
 
 RSpec.shared_examples 'graphql default instrumentation' do
-  around do |example|
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(::GraphQL::Schema)
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(TestGraphQLSchema)
-
-    example.run
-
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(::GraphQL::Schema)
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(TestGraphQLSchema)
-  end
-
   describe 'query trace' do
     subject(:result) { TestGraphQLSchema.execute('{ user(id: 1) { name } }') }
 
@@ -71,16 +61,6 @@ RSpec.shared_examples 'graphql default instrumentation' do
 end
 
 RSpec.shared_examples 'graphql instrumentation with unified naming convention trace' do
-  around do |example|
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(::GraphQL::Schema)
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(TestGraphQLSchema)
-
-    example.run
-
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(::GraphQL::Schema)
-    Datadog::GraphQLTestHelpers.reset_schema_cache!(TestGraphQLSchema)
-  end
-
   describe 'query trace' do
     subject(:result) do
       TestGraphQLSchema.execute(query: 'query Users($var: ID!){ user(id: $var) { name } }', variables: { var: 1 })
@@ -104,6 +84,8 @@ RSpec.shared_examples 'graphql instrumentation with unified naming convention tr
       ['graphql.validate', 'Users']
     ].compact
 
+    let(:service) { defined?(super) ? super() : tracer.default_service }
+
     # graphql.source for execute_multiplex is not required in the span attributes specification
     spans_with_source = ['graphql.parse', 'graphql.validate', 'graphql.execute']
 
@@ -117,7 +99,7 @@ RSpec.shared_examples 'graphql instrumentation with unified naming convention tr
 
         expect(span.name).to eq(name)
         expect(span.resource).to eq(resource)
-        expect(span.service).to eq(tracer.default_service)
+        expect(span.service).to eq(service)
         expect(span.type).to eq('graphql')
 
         if spans_with_source.include?(name)

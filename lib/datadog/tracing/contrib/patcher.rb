@@ -50,6 +50,7 @@ module Datadog
           # @param e [Exception]
           def on_patch_error(e)
             # Log the error
+            # Yes!
             Datadog.logger.error("Failed to apply #{patch_name} patch. Cause: #{e} Location: #{Array(e.backtrace).first}")
 
             @patch_error_result = {

@@ -12,12 +12,12 @@ module Datadog
         module UnifiedTracePatcher
           module_function
 
-          def patch!(schemas, options)
+          def patch!(schemas)
             if schemas.empty?
-              ::GraphQL::Schema.trace_with(UnifiedTrace, **options)
+              ::GraphQL::Schema.trace_with(UnifiedTrace)
             else
               schemas.each do |schema|
-                schema.trace_with(UnifiedTrace, **options)
+                schema.trace_with(UnifiedTrace)
               end
             end
           end

@@ -22,12 +22,12 @@ module Datadog
 
           def patch
             if configuration[:with_deprecated_tracer]
-              TracingPatcher.patch!(schemas, trace_options)
+              TracingPatcher.patch!(schemas)
             elsif Integration.trace_supported?
               if configuration[:with_unified_tracer]
-                UnifiedTracePatcher.patch!(schemas, trace_options)
+                UnifiedTracePatcher.patch!(schemas)
               else
-                TracePatcher.patch!(schemas, trace_options)
+                TracePatcher.patch!(schemas)
               end
             else
               Datadog.logger.warn(
@@ -35,16 +35,8 @@ module Datadog
                 'or Datadog::Tracing::Contrib::GraphQL::UnifiedTrace.'\
                 'Falling back to GraphQL::Tracing::DataDogTracing.'
               )
-              TracingPatcher.patch!(schemas, trace_options)
+              TracingPatcher.patch!(schemas)
             end
-          end
-
-          def trace_options
-            {
-              service: configuration[:service_name],
-              analytics_enabled: Contrib::Analytics.enabled?(configuration[:analytics_enabled]),
-              analytics_sample_rate: configuration[:analytics_sample_rate]
-            }
           end
 
           def configuration
